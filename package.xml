@@ -11,7 +11,13 @@
 
   <depend>rclcpp</depend>
   <depend>sensor_msgs</depend>
-  <depend>open_CV</depend>
+  <depend>python3-opencv</depend>
+
+  <build_depend>gstreamer1.0-plugins-base</build_depend>
+  <build_depend>gstreamer1.0-plugins-good</build_depend>
+  <build_depend>gstreamer1.0-plugins-bad</build_depend>
+  <build_depend>gstreamer1.0-plugins-ugly</build_depend>
+  <build_depend>libgstrtspserver-1.0-dev</build_depend>
 
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>
