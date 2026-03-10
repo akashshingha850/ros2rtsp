@@ -5,3 +5,5 @@ build/
 
 # VSC stuff
 .vscode
+# Local python virtualenv
+.venv/

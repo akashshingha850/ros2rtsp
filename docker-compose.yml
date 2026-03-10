@@ -1,0 +1,31 @@
+services:
+  image2rtsp:
+    build: .
+    image: image2rtsp:latest
+    # Use host networking so the container binds to the host interfaces directly
+    # (Linux only). Remove port mapping when using host networking.
+    network_mode: "host"
+    environment:
+      - ROS_DISTRO=humble
+      # Propagate host ROS environment so DDS/discovery match (set on host if needed)
+      - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-0}
+      - RMW_IMPLEMENTATION=${RMW_IMPLEMENTATION:-}
+    # Ensure the node binds to non-localhost interface (disable local_only)
+    # and subscribe to the actual image topic available on the host
+    command: ["image2rtsp.launch.py", "local_only:=false", "topic:=/camera/image"]
+
+  # Optional: add a lightweight test publisher service if you want the container
+  # to publish dummy images for testing (uncomment and adjust image if required).
+  # test_publisher:
+  #   image: image2rtsp:latest
+  #   network_mode: "host"
+  #   environment:
+  #     - ROS_DISTRO=humble
+  #     - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-0}
+  #     - RMW_IMPLEMENTATION=${RMW_IMPLEMENTATION:-}
+  #   command: ["/bin/bash", "-c", "python3 - <<'PY'\nimport time, rclpy\nfrom rclpy.node import Node\nfrom sensor_msgs.msg import Image\nrclpy.init()\nnode = Node('dummy_pub')\npub = node.create_publisher(Image, '/camera/image', 10)\nmsg = Image()\nmsg.width=640; msg.height=480; msg.encoding='rgb8'; msg.is_bigendian=0; msg.step=msg.width*3\nmsg.data = bytes([0])*(msg.step*msg.height)\ntry:\n  while rclpy.ok():\n    pub.publish(msg)\n    rclpy.spin_once(node, timeout_sec=0.01)\n    time.sleep(1/30)\nexcept KeyboardInterrupt:\n  pass\nrclpy.shutdown()\nPY"]
+    # Do not mount the workspace by default — the image contains the built overlay.
+    # To use a host workspace for live development, uncomment and adjust the line below:
+    # volumes:
+    #   - ./:/ws:rw
+    restart: unless-stopped
