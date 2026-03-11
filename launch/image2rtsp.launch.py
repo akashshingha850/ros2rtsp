@@ -15,6 +15,8 @@ def generate_launch_description():
          package='image2rtsp',
          executable='image2rtsp',
          name='image2rtsp',
-         parameters=[config]
+         parameters=[config],
+         # Reduce runtime logging verbosity to WARN to avoid info spam in container logs
+         arguments=['--ros-args', '--log-level', 'warn']
       )
    ])

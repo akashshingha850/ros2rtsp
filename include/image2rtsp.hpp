@@ -15,6 +15,8 @@ class Image2rtsp : public rclcpp::Node{
 public:
     Image2rtsp();
     GstRTSPServer *rtsp_server;
+    uint framerate;
+    GstAppSrc *appsrc;
 
 private:
     string topic;
@@ -23,14 +25,12 @@ private:
     string pipeline;
     string default_pipeline;
     string camera_pipeline;
-    uint framerate;
     bool local_only;
     bool camera;
     bool compressed;
-    GstAppSrc *appsrc;
 
     void video_mainloop_start();
-    void rtsp_server_add_url(const char *url, const char *sPipeline, GstElement **appsrc);
+    void rtsp_server_add_url(const char *url, const char *sPipeline);
     void topic_callback(const sensor_msgs::msg::Image::SharedPtr msg);
     void compressed_topic_callback(const sensor_msgs::msg::CompressedImage::SharedPtr msg);
     uint extract_framerate(const std::string& pipeline, uint default_framerate);
@@ -40,7 +40,7 @@ private:
     rclcpp::Subscription<sensor_msgs::msg::CompressedImage>::SharedPtr subscription_compressed_;
 };
 
-static void media_configure(GstRTSPMediaFactory *factory, GstRTSPMedia *media, GstElement **appsrc);
+static void media_configure(GstRTSPMediaFactory *factory, GstRTSPMedia *media, gpointer user_data);
 static void *mainloop(void *arg);
 static gboolean session_cleanup(Image2rtsp *node, rclcpp::Logger logger, gboolean ignored);
 

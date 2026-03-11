@@ -49,15 +49,15 @@ Image2rtsp::Image2rtsp() : Node("image2rtsp"){
     if (camera == false){
         if (compressed == false){
             subscription_ = this->create_subscription<sensor_msgs::msg::Image>(topic, 10, std::bind(&Image2rtsp::topic_callback, this, _1));
-            RCLCPP_INFO(this->get_logger(), "Subscribing to sensor_msgs::msg::Image");
+            RCLCPP_DEBUG(this->get_logger(), "Subscribing to sensor_msgs::msg::Image");
         }
         else {
             subscription_compressed_ = this->create_subscription<sensor_msgs::msg::CompressedImage>(topic, 10, std::bind(&Image2rtsp::compressed_topic_callback, this, _1));
-            RCLCPP_INFO(this->get_logger(), "Subscribing to sensor_msgs::msg::CompressedImage");
+            RCLCPP_DEBUG(this->get_logger(), "Subscribing to sensor_msgs::msg::CompressedImage");
         }
     }
     else {
-        RCLCPP_INFO(this->get_logger(), "Trying to access camera device");
+        RCLCPP_DEBUG(this->get_logger(), "Trying to access camera device");
     }
 
     // Start the RTSP server
@@ -67,9 +67,9 @@ Image2rtsp::Image2rtsp() : Node("image2rtsp"){
 
     pipeline = camera ? camera_pipeline : default_pipeline;
     framerate = extract_framerate(pipeline, 30);
-    rtsp_server_add_url(mountpoint.c_str(), pipeline.c_str(), camera ? nullptr : (GstElement **)&appsrc);
+    rtsp_server_add_url(mountpoint.c_str(), pipeline.c_str());
 
-    RCLCPP_INFO(this->get_logger(), "Stream available at rtsp://%s:%s%s", gst_rtsp_server_get_address(rtsp_server), port.c_str(), mountpoint.c_str());
+    RCLCPP_DEBUG(this->get_logger(), "Stream available at rtsp://%s:%s%s", gst_rtsp_server_get_address(rtsp_server), port.c_str(), mountpoint.c_str());
 }
 
 uint Image2rtsp::extract_framerate(const std::string& pipeline, uint default_framerate = 30) {
@@ -99,7 +99,7 @@ uint Image2rtsp::extract_framerate(const std::string& pipeline, uint default_fra
             RCLCPP_WARN(this->get_logger(), "Invalid framerate value %d, using default: %d", framerate, default_framerate);
             return default_framerate;
         }
-        RCLCPP_INFO(this->get_logger(), "Using set framerate %d", framerate);
+        RCLCPP_DEBUG(this->get_logger(), "Using set framerate %d", framerate);
         return framerate;
     } catch (const std::exception& e) {
         RCLCPP_WARN(this->get_logger(), "Failed to parse framerate '%s', using default: %d", framerate_str.c_str(), default_framerate);

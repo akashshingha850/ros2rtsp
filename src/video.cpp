@@ -38,7 +38,7 @@ GstRTSPServer *Image2rtsp::rtsp_server_create(const std::string &port, const boo
     return server;
 }
 
-void Image2rtsp::rtsp_server_add_url(const char *url, const char *sPipeline, GstElement **appsrc){
+void Image2rtsp::rtsp_server_add_url(const char *url, const char *sPipeline){
     GstRTSPMountPoints *mounts;
     GstRTSPMediaFactory *factory;
 
@@ -55,9 +55,12 @@ void Image2rtsp::rtsp_server_add_url(const char *url, const char *sPipeline, Gst
 
     /* notify when our media is ready, This is called whenever someone asks for
      * the media and a new pipeline is created */
-    g_signal_connect(factory, "media-configure", (GCallback)media_configure, appsrc);
+    // Pass `this` as user_data so media_configure can access node state and push a preroll frame
+    g_signal_connect(factory, "media-configure", (GCallback)media_configure, this);
 
-    gst_rtsp_media_factory_set_shared(factory, TRUE);
+    // Use non-shared media factory so each client gets its own pipeline
+    // This avoids prerolling a shared pipeline without available appsrc data
+    gst_rtsp_media_factory_set_shared(factory, FALSE);
 
     /* attach the factory to the url */
     gst_rtsp_mount_points_add_factory(mounts, url, factory);
@@ -66,17 +69,50 @@ void Image2rtsp::rtsp_server_add_url(const char *url, const char *sPipeline, Gst
     g_object_unref(mounts);
 }
 
-static void media_configure(GstRTSPMediaFactory *factory, GstRTSPMedia *media, GstElement **appsrc){
-    if(appsrc){
-        GstElement *pipeline = gst_rtsp_media_get_element(media);
+static void media_configure(GstRTSPMediaFactory *factory, GstRTSPMedia *media, gpointer user_data){
+    Image2rtsp *node = static_cast<Image2rtsp*>(user_data);
+    GstElement *pipeline = gst_rtsp_media_get_element(media);
+    GstElement *imagesrc = gst_bin_get_by_name(GST_BIN(pipeline), "imagesrc");
 
-        *appsrc = gst_bin_get_by_name(GST_BIN(pipeline), "imagesrc");
+    if (imagesrc){
+        /* store appsrc in node for later pushes */
+        node->appsrc = GST_APP_SRC(imagesrc);
 
-        /* this instructs appsrc that we will be dealing with timed buffer */
-        gst_util_set_object_arg(G_OBJECT(*appsrc), "format", "time");
+        /* instruct appsrc that we will be dealing with timed buffers */
+        gst_util_set_object_arg(G_OBJECT(node->appsrc), "format", "time");
 
+        /* mark stream-type to not require preroll and reduce buffering */
+        gst_app_src_set_stream_type(node->appsrc, GST_APP_STREAM_TYPE_STREAM);
+        gst_app_src_set_max_buffers(node->appsrc, 0);
+        gst_app_src_set_max_bytes(node->appsrc, 0);
+        gst_app_src_set_max_time(node->appsrc, 0);
+
+        /* create a minimal dummy preroll frame to satisfy pipeline preroll */
+        guint width = 2;
+        guint height = 2;
+        guint fr = node->framerate > 0 ? node->framerate : 30;
+        GstCaps *caps = gst_caps_new_simple("video/x-raw",
+                                           "format", G_TYPE_STRING, "RGB",
+                                           "width", G_TYPE_INT, width,
+                                           "height", G_TYPE_INT, height,
+                                           "framerate", GST_TYPE_FRACTION, fr, 1,
+                                           NULL);
+        gst_app_src_set_caps(node->appsrc, caps);
+
+        gsize buf_size = width * height * 3;
+        GstBuffer *buf = gst_buffer_new_allocate(NULL, buf_size, NULL);
+        GstMapInfo map;
+        if (gst_buffer_map(buf, &map, GST_MAP_WRITE)){
+            if (map.data) memset(map.data, 64, buf_size);
+            gst_buffer_unmap(buf, &map);
+        }
+        GST_BUFFER_FLAG_SET(buf, GST_BUFFER_FLAG_LIVE);
+        gst_app_src_push_buffer(node->appsrc, buf);
+
+        gst_caps_unref(caps);
         gst_object_unref(pipeline);
-    }else{
+        return;
+    } else {
         guint i, n_streams;
         n_streams = gst_rtsp_media_n_streams(media);
 
@@ -149,7 +185,7 @@ static gboolean session_cleanup(Image2rtsp *node, rclcpp::Logger logger, gboolea
     {
         char s[32];
         snprintf(s, 32, (char *)"Sessions cleaned: %d", num);
-        RCLCPP_INFO(node->get_logger(), s);
+        RCLCPP_DEBUG(node->get_logger(), s);
     }
     return TRUE;
 }
@@ -159,7 +195,7 @@ void Image2rtsp::topic_callback(const sensor_msgs::msg::Image::SharedPtr msg){
     GstCaps *caps; // image properties. see return of Image2rtsp::gst_caps_new_from_image
     char *gst_type, *gst_format = (char *)"";
     if (appsrc != NULL){
-        RCLCPP_INFO(this->get_logger(), "Received image %dx%d, encoding=%s", msg->width, msg->height, msg->encoding.c_str());
+        RCLCPP_DEBUG(this->get_logger(), "Received image %dx%d, encoding=%s", msg->width, msg->height, msg->encoding.c_str());
         // Set caps from message
         caps = gst_caps_new_from_image(msg);
         gst_app_src_set_caps(appsrc, caps);

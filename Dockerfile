@@ -37,5 +37,16 @@ COPY --from=build /ws/install /ws/install
 COPY docker-entrypoint.sh /ros_entrypoint.sh
 RUN chmod +x /ros_entrypoint.sh
 ENV ROS_DISTRO=humble
+
+## Make ROS and workspace overlays available for interactive shells
+# This ensures `docker exec -it <container> bash` has `ros2` on PATH
+RUN echo "source /opt/ros/${ROS_DISTRO}/setup.bash || true" > /etc/profile.d/ros2.sh \
+ && echo "[ -f /ws/install/setup.bash ] && source /ws/install/setup.bash" >> /etc/profile.d/ros2.sh \
+ && chmod +x /etc/profile.d/ros2.sh
+
+# Also source in non-login interactive bash shells
+RUN echo "source /opt/ros/${ROS_DISTRO}/setup.bash || true" >> /etc/bash.bashrc \
+ && echo "[ -f /ws/install/setup.bash ] && source /ws/install/setup.bash" >> /etc/bash.bashrc
+
 ENTRYPOINT ["/ros_entrypoint.sh"]
 CMD ["image2rtsp.launch.py"]

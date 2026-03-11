@@ -8,3 +8,6 @@ python3-opencv
 libopencv-dev
 ros-humble-ros2cli
 ros-humble-rclpy
+
+net-tools
+iputils-ping
