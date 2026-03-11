@@ -2,22 +2,21 @@ FROM ros:humble-ros-base AS build
 SHELL ["/bin/bash", "-lc"]
 WORKDIR /ws
 
-# Install OS packages first (cached layer when requirements.txt unchanged)
+# Install build dependencies
 COPY apt-requirements.txt /tmp/requirements.txt
 RUN apt-get update \
   && xargs -a /tmp/requirements.txt apt-get install -y --no-install-recommends \
   && rm -rf /var/lib/apt/lists/* /tmp/requirements.txt
 
-# Copy package manifest(s) so rosdep can install system deps and this layer caches
+# Copy package manifest and install rosdeps
 COPY package.xml ./package.xml
+RUN add-apt-repository multiverse || true
 RUN source /opt/ros/humble/setup.bash \
   && rosdep update || true \
   && rosdep install -i --from-paths . --rosdistro humble -y || true
 
-# Copy rest of the sources after deps to avoid busting the deps layer on code changes
+# Copy sources and build
 COPY . .
-
-# Build with Ninja + ccache for faster incremental builds inside the container
 RUN source /opt/ros/humble/setup.bash \
   && CCACHE_DIR=/ccache mkdir -p /ccache \
   && chmod 777 /ccache \
@@ -39,7 +38,6 @@ RUN chmod +x /ros_entrypoint.sh
 ENV ROS_DISTRO=humble
 
 ## Make ROS and workspace overlays available for interactive shells
-# This ensures `docker exec -it <container> bash` has `ros2` on PATH
 RUN echo "source /opt/ros/${ROS_DISTRO}/setup.bash || true" > /etc/profile.d/ros2.sh \
  && echo "[ -f /ws/install/setup.bash ] && source /ws/install/setup.bash" >> /etc/profile.d/ros2.sh \
  && chmod +x /etc/profile.d/ros2.sh
