@@ -3,7 +3,6 @@ build-essential
 cmake
 pkg-config
 libopencv-dev
-python3-opencv
 python3-rosdep
 python3-rosdistro
 software-properties-common
@@ -13,3 +12,4 @@ libgstreamer-plugins-good1.0-dev
 libgstrtspserver-1.0-dev
 ninja-build
 ccache
+
