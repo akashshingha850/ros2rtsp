@@ -87,29 +87,9 @@ static void media_configure(GstRTSPMediaFactory *factory, GstRTSPMedia *media, g
         gst_app_src_set_max_bytes(node->appsrc, 0);
         gst_app_src_set_max_time(node->appsrc, 0);
 
-        /* create a minimal dummy preroll frame to satisfy pipeline preroll */
-        guint width = 2;
-        guint height = 2;
-        guint fr = node->framerate > 0 ? node->framerate : 30;
-        GstCaps *caps = gst_caps_new_simple("video/x-raw",
-                                           "format", G_TYPE_STRING, "RGB",
-                                           "width", G_TYPE_INT, width,
-                                           "height", G_TYPE_INT, height,
-                                           "framerate", GST_TYPE_FRACTION, fr, 1,
-                                           NULL);
-        gst_app_src_set_caps(node->appsrc, caps);
-
-        gsize buf_size = width * height * 3;
-        GstBuffer *buf = gst_buffer_new_allocate(NULL, buf_size, NULL);
-        GstMapInfo map;
-        if (gst_buffer_map(buf, &map, GST_MAP_WRITE)){
-            if (map.data) memset(map.data, 64, buf_size);
-            gst_buffer_unmap(buf, &map);
-        }
-        GST_BUFFER_FLAG_SET(buf, GST_BUFFER_FLAG_LIVE);
-        gst_app_src_push_buffer(node->appsrc, buf);
-
-        gst_caps_unref(caps);
+        /* caps and first buffer are set by topic_callback from the real image
+         * so that caps always match the actual camera resolution/format.
+         * Pushing a dummy preroll with wrong caps breaks x264enc mid-stream. */
         gst_object_unref(pipeline);
         return;
     } else {
@@ -199,6 +179,7 @@ void Image2rtsp::topic_callback(const sensor_msgs::msg::Image::SharedPtr msg){
         // Set caps from message
         caps = gst_caps_new_from_image(msg);
         gst_app_src_set_caps(appsrc, caps);
+        gst_caps_unref(caps);
         buf = gst_buffer_new_allocate(nullptr, msg->data.size(), nullptr);
         gst_buffer_fill(buf, 0, msg->data.data(), msg->data.size());
         GST_BUFFER_FLAG_SET(buf, GST_BUFFER_FLAG_LIVE);

@@ -12,10 +12,11 @@ services:
       - RMW_IMPLEMENTATION=${RMW_IMPLEMENTATION:-}
       # GStreamer debug level (uncomment for verbose GStreamer logging)
       # - GST_DEBUG=${GST_DEBUG:-}
+      # FASTRTPS_DEFAULT_PROFILES_FILE is set in the Dockerfile (baked into image)
     # Ensure the node binds to non-localhost interface (disable local_only)
     # and subscribe to the actual image topic available on the host
 
-    command: ["image2rtsp.launch.py", "local_only:=false", "topic:=/camera/image"]
+    command: ["image2rtsp.launch.py", "local_only:=false", "topic:=/camera/image", "log_level:=debug"]
 
 
     restart: unless-stopped

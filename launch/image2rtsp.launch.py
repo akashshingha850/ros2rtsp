@@ -1,6 +1,8 @@
 import os
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
+from launch.actions import DeclareLaunchArgument
+from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 
 def generate_launch_description():
@@ -10,13 +12,19 @@ def generate_launch_description():
       'parameters.yaml'
       )
 
+   log_level = LaunchConfiguration('log_level')
+
    return LaunchDescription([
+      DeclareLaunchArgument(
+         'log_level',
+         default_value='warn',
+         description='ROS logger level (debug, info, warn, error, fatal)'
+      ),
       Node(
          package='image2rtsp',
          executable='image2rtsp',
          name='image2rtsp',
          parameters=[config],
-         # Reduce runtime logging verbosity to WARN to avoid info spam in container logs
-         arguments=['--ros-args', '--log-level', 'warn']
+         arguments=['--ros-args', '--log-level', log_level]
       )
    ])

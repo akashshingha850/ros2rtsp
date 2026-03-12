@@ -35,7 +35,11 @@ RUN apt-get update \
 COPY --from=build /ws/install /ws/install
 COPY docker-entrypoint.sh /ros_entrypoint.sh
 RUN chmod +x /ros_entrypoint.sh
+# Bake FastDDS UDP-only profile into the image so the shared-memory transport
+# fix applies regardless of how the container is started (compose or docker run).
+COPY fastdds_no_shm.xml /ws/fastdds_no_shm.xml
 ENV ROS_DISTRO=humble
+ENV FASTRTPS_DEFAULT_PROFILES_FILE=/ws/fastdds_no_shm.xml
 
 ## Make ROS and workspace overlays available for interactive shells
 RUN echo "source /opt/ros/${ROS_DISTRO}/setup.bash || true" > /etc/profile.d/ros2.sh \

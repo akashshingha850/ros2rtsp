@@ -3,6 +3,7 @@ build-essential
 cmake
 pkg-config
 libopencv-dev
+python3-opencv
 python3-rosdep
 python3-rosdistro
 software-properties-common
