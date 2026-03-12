@@ -16,7 +16,8 @@ services:
     # Ensure the node binds to non-localhost interface (disable local_only)
     # and subscribe to the actual image topic available on the host
 
-    command: ["image2rtsp.launch.py", "local_only:=false", "topic:=/camera/image", "log_level:=debug"]
+    #log_level:= info, debug, warning, error, fatal
+    command: ["image2rtsp.launch.py", "local_only:=false", "topic:=/camera/image", "log_level:=info"]
 
 
     restart: unless-stopped

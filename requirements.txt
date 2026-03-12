@@ -1,1 +1,2 @@
-opencv-python
+# No required pip dependencies.
+# OpenCV is provided via apt package: python3-opencv.

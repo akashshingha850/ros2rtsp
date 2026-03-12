@@ -5,7 +5,10 @@ gstreamer1.0-plugins-bad
 gstreamer1.0-plugins-ugly
 libgstrtspserver-1.0-0
 python3-opencv
-ros-humble-ros2cli
 ros-humble-rclpy
-net-tools
-iputils-ping
+
+# Optional debug-only tools (not required for normal runtime)
+# Uncomment/install manually only when troubleshooting:
+# ros-humble-ros2cli
+# net-tools
+# iputils-ping

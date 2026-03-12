@@ -3,10 +3,10 @@ SHELL ["/bin/bash", "-lc"]
 WORKDIR /ws
 
 # Install build dependencies
-COPY apt-requirements.txt /tmp/requirements.txt
+COPY apt-requirements.txt /tmp/apt-build.txt
 RUN apt-get update \
-  && xargs -a /tmp/requirements.txt apt-get install -y --no-install-recommends \
-  && rm -rf /var/lib/apt/lists/* /tmp/requirements.txt
+  && grep -Ev '^[[:space:]]*($|#)' /tmp/apt-build.txt | xargs apt-get install -y --no-install-recommends \
+  && rm -rf /var/lib/apt/lists/* /tmp/apt-build.txt
 
 # Copy package manifest and install rosdeps
 COPY package.xml ./package.xml
@@ -29,7 +29,7 @@ WORKDIR /ws
 ## Install minimal runtime packages required by the built binaries
 COPY apt-runtime.txt /tmp/apt-runtime.txt
 RUN apt-get update \
-  && xargs -a /tmp/apt-runtime.txt apt-get install -y --no-install-recommends \
+  && grep -Ev '^[[:space:]]*($|#)' /tmp/apt-runtime.txt | xargs apt-get install -y --no-install-recommends \
   && rm -rf /var/lib/apt/lists/* /tmp/apt-runtime.txt
 
 COPY --from=build /ws/install /ws/install

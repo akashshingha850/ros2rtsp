@@ -14,9 +14,33 @@ You are reading now the README for a **default** ROS2 package. If you want to us
 ## Dependencies
 - ROS2 Humble
 
+- Dependency files in this repository:
+  - `apt-requirements.txt`: build-only system dependencies.
+  - `apt-runtime.txt`: runtime system dependencies (minimal default set).
+  - `requirements.txt`: pip dependencies (currently none required).
+- OpenCV policy: use APT package `python3-opencv` (do not install `opencv-python` via pip by default).
+
+- Optional debug-only packages:
+  - `ros-humble-ros2cli`
+  - `net-tools`
+  - `iputils-ping`
+  - These are listed as commented entries in `apt-runtime.txt` and are not installed by default.
+
 - gstreamer libs:
 ```bash
 sudo apt-get install libgstreamer-plugins-base1.0-dev libgstreamer-plugins-good1.0-dev libgstreamer-plugins-bad1.0-dev libgstrtspserver-1.0-dev gstreamer1.0-plugins-ugly gstreamer1.0-plugins-bad
+```
+
+For a minimal host setup using repository-managed lists:
+```bash
+sudo apt-get update
+grep -Ev '^[[:space:]]*($|#)' apt-requirements.txt | xargs sudo apt-get install -y --no-install-recommends
+grep -Ev '^[[:space:]]*($|#)' apt-runtime.txt | xargs sudo apt-get install -y --no-install-recommends
+```
+
+Install debug tools only when needed:
+```bash
+sudo apt-get install -y --no-install-recommends ros-humble-ros2cli net-tools iputils-ping
 ```
 ## Install
   - Navigate to the root directory, create a new directory named `ros2_ws/src`, and then change the current working directory to `ros2_ws/src`:
