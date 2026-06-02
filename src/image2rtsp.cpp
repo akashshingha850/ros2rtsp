@@ -63,7 +63,6 @@ Image2rtsp::Image2rtsp() : Node("image2rtsp"){
     // Start the RTSP server
     video_mainloop_start();
     rtsp_server = rtsp_server_create(port, local_only);
-    appsrc = NULL;
 
     pipeline = camera ? camera_pipeline : default_pipeline;
     framerate = extract_framerate(pipeline, 30);

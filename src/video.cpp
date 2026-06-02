@@ -69,28 +69,44 @@ void Image2rtsp::rtsp_server_add_url(const char *url, const char *sPipeline){
     g_object_unref(mounts);
 }
 
+struct MediaCleanupData {
+    Image2rtsp *node;
+    GstAppSrc *appsrc;
+};
+
+static void media_unprepared(GstRTSPMedia *media, gpointer user_data){
+    MediaCleanupData *data = static_cast<MediaCleanupData*>(user_data);
+    {
+        std::lock_guard<std::mutex> lock(data->node->appsrc_mutex);
+        auto &list = data->node->appsrc_list;
+        list.erase(std::remove(list.begin(), list.end(), data->appsrc), list.end());
+    }
+    gst_object_unref(data->appsrc);
+    delete data;
+}
+
 static void media_configure(GstRTSPMediaFactory *factory, GstRTSPMedia *media, gpointer user_data){
     Image2rtsp *node = static_cast<Image2rtsp*>(user_data);
     GstElement *pipeline = gst_rtsp_media_get_element(media);
     GstElement *imagesrc = gst_bin_get_by_name(GST_BIN(pipeline), "imagesrc");
+    gst_object_unref(pipeline);
 
     if (imagesrc){
-        /* store appsrc in node for later pushes */
-        node->appsrc = GST_APP_SRC(imagesrc);
+        GstAppSrc *appsrc = GST_APP_SRC(imagesrc);
 
-        /* instruct appsrc that we will be dealing with timed buffers */
-        gst_util_set_object_arg(G_OBJECT(node->appsrc), "format", "time");
+        gst_util_set_object_arg(G_OBJECT(appsrc), "format", "time");
+        gst_app_src_set_stream_type(appsrc, GST_APP_STREAM_TYPE_STREAM);
+        gst_app_src_set_max_buffers(appsrc, 0);
+        gst_app_src_set_max_bytes(appsrc, 0);
+        gst_app_src_set_max_time(appsrc, 0);
 
-        /* mark stream-type to not require preroll and reduce buffering */
-        gst_app_src_set_stream_type(node->appsrc, GST_APP_STREAM_TYPE_STREAM);
-        gst_app_src_set_max_buffers(node->appsrc, 0);
-        gst_app_src_set_max_bytes(node->appsrc, 0);
-        gst_app_src_set_max_time(node->appsrc, 0);
+        {
+            std::lock_guard<std::mutex> lock(node->appsrc_mutex);
+            node->appsrc_list.push_back(appsrc);
+        }
 
-        /* caps and first buffer are set by topic_callback from the real image
-         * so that caps always match the actual camera resolution/format.
-         * Pushing a dummy preroll with wrong caps breaks x264enc mid-stream. */
-        gst_object_unref(pipeline);
+        auto *cleanup = new MediaCleanupData{node, appsrc};
+        g_signal_connect(media, "unprepared", G_CALLBACK(media_unprepared), cleanup);
         return;
     } else {
         guint i, n_streams;
@@ -171,37 +187,38 @@ static gboolean session_cleanup(Image2rtsp *node, rclcpp::Logger logger, gboolea
 }
 
 void Image2rtsp::topic_callback(const sensor_msgs::msg::Image::SharedPtr msg){
-    GstBuffer *buf;
-    GstCaps *caps; // image properties. see return of Image2rtsp::gst_caps_new_from_image
-    char *gst_type, *gst_format = (char *)"";
-    if (appsrc != NULL){
-        RCLCPP_DEBUG(this->get_logger(), "Received image %dx%d, encoding=%s", msg->width, msg->height, msg->encoding.c_str());
-        // Set caps from message
-        caps = gst_caps_new_from_image(msg);
+    std::lock_guard<std::mutex> lock(appsrc_mutex);
+    if (appsrc_list.empty()) return;
+
+    RCLCPP_DEBUG(this->get_logger(), "Received image %dx%d, encoding=%s", msg->width, msg->height, msg->encoding.c_str());
+    GstCaps *caps = gst_caps_new_from_image(msg);
+    if (!caps) return;
+
+    for (GstAppSrc *appsrc : appsrc_list){
         gst_app_src_set_caps(appsrc, caps);
-        gst_caps_unref(caps);
-        buf = gst_buffer_new_allocate(nullptr, msg->data.size(), nullptr);
+        GstBuffer *buf = gst_buffer_new_allocate(nullptr, msg->data.size(), nullptr);
         gst_buffer_fill(buf, 0, msg->data.data(), msg->data.size());
         GST_BUFFER_FLAG_SET(buf, GST_BUFFER_FLAG_LIVE);
         gst_app_src_push_buffer(appsrc, buf);
     }
+    gst_caps_unref(caps);
 }
 
 void Image2rtsp::compressed_topic_callback(const sensor_msgs::msg::CompressedImage::SharedPtr msg){
-    if (appsrc == NULL) return;
-    // Decompress the image
+    std::lock_guard<std::mutex> lock(appsrc_mutex);
+    if (appsrc_list.empty()) return;
+
     cv::Mat img = cv::imdecode(cv::Mat(msg->data), cv::IMREAD_UNCHANGED);
     if (img.empty()) {
         RCLCPP_ERROR(this->get_logger(), "Failed to decompress image");
         return;
     }
 
-    // Determine the GStreamer caps
     std::string gst_format;
     switch (img.type()) {
-        case CV_8UC3: gst_format = "BGR"; break;    // BGR images
-        case CV_8UC4: gst_format = "RGBA"; break;   // RGBA images
-        case CV_8UC1: gst_format = "GRAY8"; break;  // Grayscale images
+        case CV_8UC3: gst_format = "BGR"; break;
+        case CV_8UC4: gst_format = "RGBA"; break;
+        case CV_8UC1: gst_format = "GRAY8"; break;
         default:
             RCLCPP_ERROR(this->get_logger(), "Unsupported image type");
             return;
@@ -214,15 +231,12 @@ void Image2rtsp::compressed_topic_callback(const sensor_msgs::msg::CompressedIma
                                         "framerate", GST_TYPE_FRACTION, framerate, 1,
                                         nullptr);
 
-    // Set caps on appsrc
-    gst_app_src_set_caps(appsrc, caps);
+    for (GstAppSrc *appsrc : appsrc_list){
+        gst_app_src_set_caps(appsrc, caps);
+        GstBuffer *buf = gst_buffer_new_allocate(nullptr, img.total() * img.elemSize(), nullptr);
+        gst_buffer_fill(buf, 0, img.data, img.total() * img.elemSize());
+        GST_BUFFER_FLAG_SET(buf, GST_BUFFER_FLAG_LIVE);
+        gst_app_src_push_buffer(appsrc, buf);
+    }
     gst_caps_unref(caps);
-
-    // Create a GstBuffer and fill it with the image data
-    GstBuffer *buf = gst_buffer_new_allocate(nullptr, img.total() * img.elemSize(), nullptr);
-    gst_buffer_fill(buf, 0, img.data, img.total() * img.elemSize());
-    GST_BUFFER_FLAG_SET(buf, GST_BUFFER_FLAG_LIVE);
-
-    // Push the buffer to GStreamer
-    gst_app_src_push_buffer(appsrc, buf);
 }
