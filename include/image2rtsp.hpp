@@ -3,8 +3,12 @@
 
 #include <gst/gst.h>
 #include <gst/rtsp-server/rtsp-server.h>
+#include <gst/app/gstappsrc.h>
 #include <rclcpp/rclcpp.hpp>
 #include <string>
+#include <vector>
+#include <mutex>
+#include <algorithm>
 #include "sensor_msgs/msg/image.hpp"
 #include "sensor_msgs/msg/compressed_image.hpp"
 #include <opencv2/opencv.hpp>
@@ -16,7 +20,8 @@ public:
     Image2rtsp();
     GstRTSPServer *rtsp_server;
     uint framerate;
-    GstAppSrc *appsrc;
+    std::vector<GstAppSrc*> appsrc_list;
+    std::mutex appsrc_mutex;
 
 private:
     string topic;
